@@ -17,6 +17,7 @@ cc = {}
 ---@field reboot fun(): nil
 ---@field getComputerID fun(): number
 ---@field computerID fun(): number
+---@field version fun(): string
 ---@field getComputerLabel fun(): string?
 ---@field computerLabel fun(): string?
 ---@field setComputerLabel fun(label?: string): nil

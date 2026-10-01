@@ -21,42 +21,19 @@ local function drawStatusline()
     term.write(statusLine)
 end
 
-local function refuel()
+local function refuel(all)
     term.clear()
     drawStatusline()
 
     term.setCursorPos(2, 1)
 
-    print("Place some fuel in my inventory")
-    print("")
-    print("Press any button to refuel")
+    print("Press any button to refuel...")
     os.pullEvent("key")
-end
 
-local function requireFuel(requiredLevel)
-    local MAX_TRIES = 10
-    local tries = 0
-
-    term.clear()
-    drawStatusline()
-
-    local fuelLevel = turtle.getFuelLevel()
-
-
-    while fuelLevel < requiredLevel and MAX_TRIES > tries do
-        tries = tries + 1
-
-        term.clear()
-        term.setCursorPos(2, 1)
-        print("only " .. fuelLevel .. "/" .. requiredLevel .. " required fuel. Try " .. tries .. "/" .. MAX_TRIES)
-        os.sleep(2)
-
-        refuel()
-    end
-    if MAX_TRIES == tries then
-        return nil
+    if all then
+        turtle.refuel()
     else
-        return true
+        turtle.refuel(1)
     end
 end
 
@@ -83,12 +60,26 @@ local function requireTool(requiredTool, requiredSlot)
         print("No or wrong tool in the required slot equiped.")
         print()
         print("Expecting " .. requiredTool .. " in " .. requiredSlot .. " slot. Try " .. tries .. "/" .. MAX_TRIES)
-        os.sleep(2)
+        print()
+
+        print("Press any button to recheck...")
+        os.pullEvent("key")
+
+        if requiredSlot == "right" then
+            equippedTool = turtle.getEquippedRight()
+        elseif requiredSlot == "left" then
+            equippedTool = turtle.getEquippedLeft()
+        else
+            print("Unknown toolslot required. Please report bug to Jonas")
+        end
     end
+
     if MAX_TRIES == tries then
         return nil
-    else
+    elseif tries == 0 then
         return true
+    else
+        return false
     end
 end
 
@@ -161,7 +152,6 @@ local function drawMenu(menuName, menuItems, menuIndex)
 end
 
 
--- @return selected item number
 local function menu(menuName, menuItems)
     local menuIndex = 1
 
@@ -187,11 +177,231 @@ local function menu(menuName, menuItems)
     end
 end
 
+local function requireFuel(requiredLevel)
+    local MAX_TRIES = 10
+    local tries = 0
+
+    local fuelLevel = turtle.getFuelLevel()
+
+    while fuelLevel < requiredLevel and MAX_TRIES > tries do
+        tries = tries + 1
+
+        local selected = menu("Not enough fuel ( " .. fuelLevel .. "/" .. requiredLevel .. " )",
+            { "refuel all", "refuel single", "Cancel" })
+
+        if selected == "refuel single" then
+            refuel(false)
+        elseif selected == "refuel all" then
+            refuel(true)
+        end
+
+        fuelLevel = turtle.getFuelLevel()
+    end
+
+    if MAX_TRIES == tries then
+        return nil
+    elseif tries == 0 then
+        return true
+    else
+        return false
+    end
+end
+
+
 local function fuelNeededToExcavate(dimensions)
     return (2 * (dimensions * dimensions + 64 * 2)) * 1.5
 end
 
-local function excavate()
+local function debugTurtle(requiredFuel, requiredTool, requiredToolSlot)
+    local TEST_COUNT = 2
+    local successfullTestCount = 0
+
+    local requireFuelResult = requireFuel(requiredFuel)
+    if requireFuelResult == nil then
+        return false
+    elseif requireFuelResult then
+        successfullTestCount = successfullTestCount + 1
+    end
+
+    if requiredTool == nil or requiredToolSlot == nil then
+        print("Required tool or slot is not set. Please report bug to Jonas")
+        os.sleep(10)
+        return false
+    else
+        local requireToolResult = requireTool(requiredTool, requiredToolSlot)
+        if requireToolResult == nil then
+            return false
+        elseif requireToolResult then
+            successfullTestCount = successfullTestCount + 1
+        end
+    end
+
+    return successfullTestCount == TEST_COUNT
+end
+
+local function checkInventoryFull()
+    for i = 1, 16 do
+        if turtle.getItemCount(i) > 0 then
+            return true
+        end
+    end
+    return false
+end
+
+local function digUpDownPath(length)
+    for _ = 1, length do
+        while true do
+            local fwdResult, _ = turtle.forward()
+            if not fwdResult then
+                local _, block = turtle.inspect()
+                if block.name == "minecraft:bedrock" then
+                    return false
+                else
+                    turtle.dig()
+                end
+            else
+                break
+            end
+        end
+        turtle.digUp()
+        turtle.digDown()
+    end
+    return true
+end
+
+local function unload(level)
+    turtle.turnLeft()
+    turtle.turnLeft()
+    for m = 1, level do
+        turtle.up()
+    end
+    for slot = 1, 16 do
+        turtle.select(slot)
+        turtle.drop()
+    end
+    turtle.turnLeft()
+    turtle.turnLeft()
+    for m = 1, level do
+        turtle.down()
+    end
+end
+
+
+local function returnHome(facing, initDimensions, level)
+    for m = 1, facing % 4 do
+        turtle.turnLeft()
+    end
+
+    turtle.turnLeft()
+    turtle.turnLeft()
+    local meem = 0
+    if initDimensions % 2 == 0 then
+        meem = initDimensions / 2 - 1
+    else
+        meem = initDimensions / 2
+    end
+    for n = 1, meem do
+        turtle.forward()
+    end
+    turtle.turnRight()
+    for n = 1, initDimensions / 2 do
+        turtle.forward()
+    end
+    turtle.turnRight()
+end
+
+local function excavate(initDimensions)
+    if initDimensions < 3 then
+        print("Excavatedimensions must be at least 3")
+        return
+    end
+
+    local level = 0
+    local passOne = true
+
+    while true do
+        local facing = 0
+        local dimensions = initDimensions
+
+
+        turtle.digDown()
+        if turtle.down() then
+            level = level + 1
+        end
+        turtle.digDown()
+        if turtle.down() then
+            level = level + 1
+        end
+        turtle.digDown()
+        if passOne then
+            passOne = false
+        else
+            if turtle.down() then
+                level = level + 1
+            end
+            turtle.digDown()
+        end
+
+        if not digUpDownPath(dimensions - 1) then
+            for m = 1, level do
+                turtle.up()
+            end
+            return
+        end
+
+        turtle.turnRight()
+        facing = facing + 1
+
+        while dimensions > 1 do
+            for _ = 1, 2 do
+                if not digUpDownPath(dimensions - 1) then
+                    for m = 1, level do
+                        turtle.up()
+                    end
+                    return
+                end
+
+                turtle.turnRight()
+                facing = facing + 1
+            end
+            dimensions = dimensions - 1
+        end
+
+        returnHome(facing, initDimensions, level)
+
+        if checkInventoryFull() then
+            unload(level)
+        end
+    end
+
+    -- turtle.turnRight()
+    -- for n = 1, initDimensions / 2 do
+    --     turtle.forward()
+    -- end
+    -- turtle.turnRight()
+    -- turtle.down()
+    -- end
+
+    -- for x = 1, dimensions / 3 do
+    --     for i = 1, 3 do
+    --         turtle.dig()
+    --         for j = 1, dimensions - (1 + x) do
+    --             turtle.forward()
+    --             turtle.dig()
+    --             turtle.digUp()
+    --             turtle.digDown()
+    --         end
+    --
+    --         turtle.forward()
+    --         turtle.digUp()
+    --         turtle.digDown()
+    --
+    --         turtle.turnRight()
+    --     end
+    -- end
+end
+
+local function initExcavate()
     local MAX_TRIES = 3
     local tries = 0
     local validInput = false
@@ -202,42 +412,47 @@ local function excavate()
         if requireFuel(fuelNeededToExcavate(3)) == nil then
             return
         end
-        if requireTool("minecraft:diamond_pickaxe") == nil then
+        if requireTool("minecraft:diamond_pickaxe", "right") == nil then
             return
         end
-        shell.run("excavate " .. 3)
+        -- shell.run("excavate " .. 3)
+        excavate(3)
     elseif selectedSize == "5x5" then
         if requireFuel(fuelNeededToExcavate(5)) == nil then
             return
         end
-        if requireTool("minecraft:diamond_pickaxe") == nil then
+        if requireTool("minecraft:diamond_pickaxe", "right") == nil then
             return
         end
-        shell.run("excavate " .. 5)
+        -- shell.run("excavate " .. 5)
+        excavate(5)
     elseif selectedSize == "10x10" then
         if requireFuel(fuelNeededToExcavate(10)) == nil then
             return
         end
-        if requireTool("minecraft:diamond_pickaxe") == nil then
+        if requireTool("minecraft:diamond_pickaxe", "right") == nil then
             return
         end
-        shell.run("excavate " .. 10)
+        -- shell.run("excavate " .. 10)
+        excavate(10)
     elseif selectedSize == "15x15" then
         if requireFuel(fuelNeededToExcavate(15)) == nil then
             return
         end
-        if requireTool("minecraft:diamond_pickaxe") == nil then
+        if requireTool("minecraft:diamond_pickaxe", "right") == nil then
             return
         end
-        shell.run("excavate " .. 15)
+        -- shell.run("excavate " .. 15)
+        excavate(15)
     elseif selectedSize == "20x20" then
         if requireFuel(fuelNeededToExcavate(20)) == nil then
             return
         end
-        if requireTool("minecraft:diamond_pickaxe") == nil then
+        if requireTool("minecraft:diamond_pickaxe", "right") == nil then
             return
         end
-        shell.run("excavate " .. 20)
+        -- shell.run("excavate " .. 20)
+        excavate(20)
     elseif selectedSize == "custom" then
         term.clear()
         term.setCursorPos(1, 1)
@@ -249,13 +464,11 @@ local function excavate()
                 print("Please insert a valid number")
                 tries = tries + 1
             else
-                if requireFuel(fuelNeededToExcavate(dimensions)) == nil then
+                if debugTurtle(fuelNeededToExcavate(dimensions), "minecraft:diamond_pickaxe", "right") == nil then
                     return
                 end
-                if requireTool("minecraft:diamond_pickaxe") == nil then
-                    return
-                end
-                shell.run("excavate " .. dimensions)
+                -- shell.run("excavate " .. dimensions)
+                excavate(dimensions)
             end
         end
     end
@@ -289,11 +502,11 @@ local function main()
                     term.setCursorPos(1, 1)
                     return
                 elseif selectedMenuItem == "refuel" then
-                    refuel()
+                    refuel(true)
                 end
             elseif menuContent[1] == "Programs" then
                 if selectedMenuItem == "excavate" then
-                    excavate()
+                    initExcavate()
                     break
                 elseif selectedMenuItem == "Ahorn" then
                     menuContent = { "Set AHORN color", { "RED", "GREEN", "BLUE", "back" } }
@@ -323,21 +536,16 @@ local function main()
                     print("")
                     print("Press any key to return...")
                     os.pullEvent("key")
-                elseif selectedMenuItem == "Why am i not missbehaving?" then
-                    term.clear()
-                    term.setCursorPos(1, 1)
-
-                    if turtle.getFuelLevel() == 0 then
-                        print("No fuel")
-                    elseif turtle.getEquippedRight() == nil then
-                        print("Tool is missing")
-                    else
-                        print("I dont know, ask Jonas")
+                elseif selectedMenuItem == "Why am i missbehaving?" then
+                    local dbgResult = debugTurtle(1, "minecraft:diamond_pickaxe", "right")
+                    if dbgResult then
+                        term.clear()
+                        term.setCursorPos(1, 1)
+                        print("I dont know whats wrong. Ask Jonas")
+                        print("")
+                        print("Press any key to return...")
+                        os.pullEvent("key")
                     end
-
-                    print("")
-                    print("Press any key to return...")
-                    os.pullEvent("key")
                 elseif selectedMenuItem == "back" then
                     break
                 end
@@ -347,3 +555,4 @@ local function main()
 end
 
 main()
+turtle.turnRight()
