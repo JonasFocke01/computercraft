@@ -493,7 +493,7 @@ local function main()
             local selectedMenuItem = menu(menuContent[1], menuContent[2])
 
             if menuContent[1] == "Start" then
-                if selectedMenuItem == "programs" then
+                if selectedMenuItem == "feef" then
                     menuContent = { "Programs", { "excavate", "Ahorn", "back" } }
                 elseif selectedMenuItem == "help" then
                     menuContent = { "Help", { "Who am i?", "Why am i missbehaving?", "back" } }
