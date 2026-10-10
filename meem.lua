@@ -487,12 +487,12 @@ end
 
 local function main()
     while true do
-        local menuContent = { "NOT START", { "programs", "help", "terminal", "refuel" } }
+        local menuContent = { "Start", { "programs", "help", "terminal", "refuel" } }
 
         while true do
             local selectedMenuItem = menu(menuContent[1], menuContent[2])
 
-            if menuContent[1] == "NOT START" then
+            if menuContent[1] == "Start" then
                 if selectedMenuItem == "programs" then
                     menuContent = { "Programs", { "excavate", "Ahorn", "back" } }
                 elseif selectedMenuItem == "help" then
