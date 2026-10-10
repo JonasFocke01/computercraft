@@ -487,7 +487,7 @@ end
 
 local function main()
     while true do
-        local menuContent = { "Start", { "programs", "help", "terminal", "refuel" } }
+        local menuContent = { "Start", { "feef", "help", "terminal", "refuel" } }
 
         while true do
             local selectedMenuItem = menu(menuContent[1], menuContent[2])
