@@ -1,3 +1,9 @@
+-- The 'OS' for my worker-turtles.
+-- No setup required.
+-- Just download to a turtle as startup script.
+-- Adding programs is done by adding menuitems in main
+-- This script contains my own spin on a more efficient, although not good, excavate
+
 local FIRST_ITEM_LINE_ON_TURTLE_SCREEN_FROM_CENTER = -6
 
 local TERMINAL_WIDTH, TERMINAL_HEIGHT = term.getSize()
@@ -373,32 +379,6 @@ local function excavate(initDimensions)
             unload(level)
         end
     end
-
-    -- turtle.turnRight()
-    -- for n = 1, initDimensions / 2 do
-    --     turtle.forward()
-    -- end
-    -- turtle.turnRight()
-    -- turtle.down()
-    -- end
-
-    -- for x = 1, dimensions / 3 do
-    --     for i = 1, 3 do
-    --         turtle.dig()
-    --         for j = 1, dimensions - (1 + x) do
-    --             turtle.forward()
-    --             turtle.dig()
-    --             turtle.digUp()
-    --             turtle.digDown()
-    --         end
-    --
-    --         turtle.forward()
-    --         turtle.digUp()
-    --         turtle.digDown()
-    --
-    --         turtle.turnRight()
-    --     end
-    -- end
 end
 
 local function initExcavate()
