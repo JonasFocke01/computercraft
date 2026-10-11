@@ -1,6 +1,10 @@
 ## computercraft
 my personal collection of computercraft items
 
+## Using
+
+To download any of the contained script just run `wget https://raw.githubusercontent.com/JonasFocke01/computercraft/refs/heads/master/<SCRIPTNAME> <FILENAME-ON-COMPUTER>`
+
 ## My beginnings
 
 The absolute Gem of my beginnings in programming are found on [Pastebin](https://pastebin.com/u/Haro21)
