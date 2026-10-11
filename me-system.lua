@@ -59,13 +59,17 @@ function storeAllItems(storageChests, turtleModem, dbg)
         end
     end
 
-    for i = 1, contentSize do
+    for i = 1, 16 do
         table.insert(pullProcesses,
             function ()
                 local targetChest = mostEmptyStorageChest(storageChests, contentSize)
 
+                if targetChest == nil then
+                    return
+                end
+
                 if dgb then term.setCursorPos(x, y) end
-                if dgb then term.write("Storing back items " .. i .. "/" .. contentSize .. " ") end
+                if dgb then term.write("Storing back items " .. i .. "/16") end
 
                 targetChest.pullItems(turtleModem.getNameLocal(), i)
             end
@@ -86,8 +90,6 @@ function indexStorage(storageChests, TERM_HEIGHT, dbg)
     local chestProcesses = {}
 
     local x, y = term.getCursorPos()
-    local sumOfUsedSlots = 0
-    local sumOfMaxSlots = 0
 
     for k, chest in pairs(storageChests) do
         table.insert(chestProcesses,
@@ -97,9 +99,6 @@ function indexStorage(storageChests, TERM_HEIGHT, dbg)
 
                 chest.cachedList = chest.list()
                 chest.maxSize = chest.size()
-
-                sumOfUsedSlots = sumOfUsedSlots + #chest.cachedList
-                sumOfMaxSlots = sumOfMaxSlots + chest.maxSize
             end
         )
     end
@@ -112,6 +111,14 @@ function indexStorage(storageChests, TERM_HEIGHT, dbg)
 
         end
     )
+
+    local sumOfUsedSlots = 0
+    local sumOfMaxSlots = 0
+    for k, chest in pairs(storageChests) do
+        sumOfUsedSlots = sumOfUsedSlots + #chest.cachedList
+        sumOfMaxSlots = sumOfMaxSlots + chest.maxSize
+    end
+
 
     return storageChests, sumOfUsedSlots, sumOfMaxSlots
 end
@@ -218,7 +225,14 @@ function main(args)
         term.setTextColor(math.random(1, 16))
         textWithRainbow("ComputerCraft ME System")
 
-        term.setTextColor(colors.gray)
+        if math.floor(sumOfMaxSlots * 0.9) <= sumOfUsedSlots then
+            term.setTextColor(colors.red)
+        elseif math.floor(sumOfMaxSlots * 0.7) <= sumOfUsedSlots then
+            term.setTextColor(colors.pink)
+        else
+            term.setTextColor(colors.gray)
+        end
+
         term.setCursorPos(1, TERM_HEIGHT)
         term.write(sumOfUsedSlots .. "/" .. sumOfMaxSlots .. " used slots")
 
