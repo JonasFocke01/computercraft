@@ -1,5 +1,5 @@
 ## computercraft
-my personal collection of computercraft items
+my personal collection of computercraft scripts
 
 ## Using
 
