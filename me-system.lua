@@ -204,7 +204,20 @@ function drawAutoUploadButton()
             term.setBackgroundColor(colors.red)
             term.write("autouploading")
         end
-        os.sleep()
+    end
+    storeAndResetCursor(drawButton)
+end
+
+function drawShowTopItemsButton(showTopItems)
+    function drawButton()
+        term.setCursorPos(TERM_WIDTH - 13, 3)
+        term.setTextColor(colors.black)
+        term.setBackgroundColor(colors.lightGray)
+        if showTopItems then
+            term.write("hide top items")
+        else
+            term.write("show top items")
+        end
     end
     storeAndResetCursor(drawButton)
 end
@@ -218,13 +231,43 @@ function drawSearchPrompt()
     term.setCursorBlink(true)
 end
 
-function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots)
+function topItems(storageChests)
+    local items = {}
+
+    for _, chest in pairs(storageChests) do
+        for _, item in pairs(chest.cachedList) do
+            local needleItem = nil
+            for _, haystackItem in pairs(items) do
+                if haystackItem.name == item.name then
+                    needleItem = item
+                end
+            end
+
+            if needleItem then
+                -- needleItem.count = needleItem.count + item.count
+
+                for _, haystackItem in pairs(items) do
+                    if haystackItem.name == item.name then
+                        haystackItem.count = haystackItem.count + item.count
+                    end
+                end
+            else
+                table.insert(items, {count = item.count, name = item.name})
+            end
+        end
+    end
+
+    return items
+end
+
+function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, showTopItems, storageChests)
     term.clear()
     term.setCursorBlink(false)
     term.setCursorPos(1, 1)
     textWithRainbow("ComputerCraft ME System")
 
     drawAutoUploadButton()
+    drawShowTopItemsButton(showTopItems)
 
     if math.floor(sumOfMaxSlots * 0.9) <= sumOfUsedSlots then
         term.setTextColor(colors.red)
@@ -237,9 +280,16 @@ function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots)
     term.setCursorPos(1, TERM_HEIGHT)
     term.write(sumOfUsedSlots .. "/" .. sumOfMaxSlots .. " used slots")
 
-    if not autoUpload then
+    if not (autoUpload or showTopItems) then
         drawSearchPrompt()
+    elseif showTopItems then
+        term.setCursorPos(1, 3)
+        local items = topItems(storageChests)
+        for k, item in pairs(items) do
+            print(tostring(item.count) .. "x " .. item.name)
+        end
     end
+
 end
 
 function init()
@@ -293,13 +343,13 @@ function manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, tur
     storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
-    drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload)
+    drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload, storageChests)
 
     local input = read()
 
     autoUpload = false
 
-    drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload)
+    drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload, storageChests)
 
     storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
@@ -363,17 +413,22 @@ function main(args)
 
             spawn(
                 function ()
+                    local showTopItems = false
+
                     while true do
                         local event, button, x, y = os.pullEvent("mouse_click")
 
                         if x > TERM_WIDTH - 12 and y == 2 then
                             autoUpload = not autoUpload
                         end
+                        if x > TERM_WIDTH - 13 and y == 3 then
+                            showTopItems = not showTopItems
+                        end
 
                         storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
                             awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
-                        drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots)
+                        drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, showTopItems, storageChests)
 
                         os.sleep()
                     end
@@ -391,7 +446,7 @@ function main(args)
 
                             storeAllItems(storageChests, turtleModem, dbg)
 
-                            drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots)
+                            drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, storageChests)
                         end
 
                         os.sleep()
