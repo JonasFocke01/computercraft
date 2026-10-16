@@ -184,7 +184,6 @@ function textWithRainbow(text)
 end
 
 function main(args)
-
     local dbg = args[1] == "dbg"
 
     if dbg then
@@ -203,10 +202,24 @@ function main(args)
 
     local modem = peripheral.find("modem")
 
+    if not modem then
+        term.clear()
+        term.setCursorPos(1, 1)
+        print("no modem found")
+        return;
+    end
+
     if dgb then term.setCursorPos(1, 4) end
     if dgb then term.write("Found modem") end
 
     local storageChests = initStorage(modem)
+
+    if #storageChests == 0 then
+        term.clear()
+        term.setCursorPos(1, 1)
+        print("No chests attached")
+        return;
+    end
 
     if dgb then term.setCursorPos(1, 5) end
     if dgb then term.write("Initialized storage") end
