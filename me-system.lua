@@ -193,7 +193,7 @@ function storeAndResetCursor(callback)
     term.setBackgroundColor(bcolor)
 end
 
-function writeAutoUploadButton(autoUpload)
+function drawAutoUploadButton()
     function drawButton()
         term.setCursorPos(TERM_WIDTH - 12, 2)
         term.setTextColor(colors.black)
@@ -209,12 +209,22 @@ function writeAutoUploadButton(autoUpload)
     storeAndResetCursor(drawButton)
 end
 
-function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload)
+function drawSearchPrompt()
+    term.setCursorPos(1, 6)
+    term.setTextColor(colors.lightGray)
+    term.write("Search for: ")
+    term.setCursorPos(13, 6)
+    term.setTextColor(colors.white)
+    term.setCursorBlink(true)
+end
+
+function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots)
     term.clear()
+    term.setCursorBlink(false)
     term.setCursorPos(1, 1)
     textWithRainbow("ComputerCraft ME System")
 
-    writeAutoUploadButton(autoUpload)
+    drawAutoUploadButton()
 
     if math.floor(sumOfMaxSlots * 0.9) <= sumOfUsedSlots then
         term.setTextColor(colors.red)
@@ -226,6 +236,10 @@ function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload)
 
     term.setCursorPos(1, TERM_HEIGHT)
     term.write(sumOfUsedSlots .. "/" .. sumOfMaxSlots .. " used slots")
+
+    if not autoUpload then
+        drawSearchPrompt()
+    end
 end
 
 function init()
@@ -275,22 +289,17 @@ function awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleMode
     return storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem
 end
 
-function manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem, autoUpload)
+function manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
     storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
     drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload)
 
-    term.setCursorPos(1, 6)
-    term.setTextColor(colors.lightGray)
-    term.write("Search for: ")
-    term.setCursorPos(1, 7)
-    term.setTextColor(colors.gray)
-    term.write("(empty to upload all)")
-    term.setTextColor(colors.white)
-    term.setCursorPos(13, 6)
-
     local input = read()
+
+    autoUpload = false
+
+    drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload)
 
     storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
@@ -300,8 +309,9 @@ function manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, tur
 
         term.setCursorPos(1, 10)
         term.setTextColor(colors.gray)
-        term.write("Press any key to try again...")
+        term.write("Press any key to continue...")
         term.setTextColor(colors.white)
+        term.setCursorBlink(false)
 
         while true do
             _, key = os.pullEvent("key")
@@ -317,8 +327,6 @@ function manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, tur
 
     storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
-
-    drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload)
 
     if dgb then term.setCursorPos(1, 11) end
     storeAllItems(storageChests, turtleModem, dbg)
@@ -343,14 +351,12 @@ function main(args)
     -- local storageChests, sumOfUsedSlots, sumOfMaxSlots = indexStorage(storageChests)
     local storageChests, sumOfUsedSlots, sumOfMaxSlots = nil
 
-    local autoUpload = false
-
     parallel.waitForAll(
         function (spawn)
             spawn(
                 function()
                     while true do
-                        manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, modem, autoUpload)
+                        manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, modem)
                     end
                 end
             )
@@ -364,20 +370,29 @@ function main(args)
                             autoUpload = not autoUpload
                         end
 
-                        writeAutoUploadButton(autoUpload)
+                        storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+                            awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
+                        drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots)
 
-                        -- print(("The mouse button %s was pressed at %d, %d"):format(button, x, y))
-                        -- print(("Expected  mouse button %s was pressed at %d, %d"):format(button, x, y))
+                        os.sleep()
+                    end
+                end
+            )
 
-                        -- if event == "peripheral" then
-                        --     storageChests, modem = init()
-                        --     storageChests, sumOfUsedSlots, sumOfMaxSlots = indexStorage(storageChests, dbg)
-                        -- end
-                        --
-                        -- if event == "peripheral_detach" then
-                        --     storageChests, modem = init()
-                        -- end
+            spawn(
+                function ()
+                    while true do
+                        os.pullEvent("turtle_inventory")
+
+                        if autoUpload then
+                            storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+                                awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
+
+                            storeAllItems(storageChests, turtleModem, dbg)
+
+                            drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots)
+                        end
 
                         os.sleep()
                     end
@@ -385,11 +400,11 @@ function main(args)
             )
         end
     )
-    -- manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, modem)
 end
 
 TERM_WIDTH, TERM_HEIGHT = term.getSize()
 
 local tArgs = { ... }
+autoUpload = false
 
 main(tArgs)
