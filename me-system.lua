@@ -297,8 +297,10 @@ function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, showStats, storageChe
         term.setTextColor(colors.gray)
     end
 
-    term.setCursorPos(1, TERM_HEIGHT)
-    term.write(sumOfUsedSlots .. "/" .. sumOfMaxSlots .. " used slots")
+    if not showStats then
+        term.setCursorPos(1, TERM_HEIGHT)
+        term.write(sumOfUsedSlots .. "/" .. sumOfMaxSlots .. " used slots")
+    end
 
     if not (autoUpload or showStats) then
         drawSearchPrompt()
@@ -307,12 +309,20 @@ function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, showStats, storageChe
         local items = items(storageChests)
         table.sort(items, function (a, b) return a.count > b.count end)
 
+        local totalItems = 0
+        for _, item in pairs(items) do
+            totalItems = totalItems + item.count
+        end
+
+        if #items >= 1 then print(tostring(totalItems) .. " total items") end
+        if #items >= 1 then print(tostring(sumOfUsedSlots) .. " stacks") end
+        if #items >= 1 then print(tostring(#items) .. " unique items") end
+        if #items >= 1 then print() end
         if #items >= 1 then print(tostring(items[1].count) .. "x " .. items[1].name) end
         if #items >= 2 then print(tostring(items[2].count) .. "x " .. items[2].name) end
         if #items >= 3 then print(tostring(items[3].count) .. "x " .. items[3].name) end
         if #items >= 4 then print(tostring(items[4].count) .. "x " .. items[4].name) end
         if #items >= 5 then print(tostring(items[5].count) .. "x " .. items[5].name) end
-        if #items >= 6 then print(tostring(items[6].count) .. "x " .. items[6].name) end
         if #items >= 7 then print("...") end
     end
 
