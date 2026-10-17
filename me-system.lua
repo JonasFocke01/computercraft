@@ -268,7 +268,6 @@ function completeMeState(needleText, storageChests)
     for _, item in pairs(items) do
         local prefixLength = string.find(item.name, ":") + 1
         local haystackItemName = string.sub(item.name, prefixLength, prefixLength + # needleText - 1)
-        print(haystackItemName)
         if string.find(haystackItemName, needleText) then
             table.insert(resultItemNames, string.sub(item.name, prefixLength + #needleText))
         end
