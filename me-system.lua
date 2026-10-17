@@ -226,6 +226,9 @@ function drawSearchPrompt()
     term.setCursorPos(1, 6)
     term.setTextColor(colors.lightGray)
     term.write("Search for: ")
+    term.setCursorPos(1, 7)
+    term.setTextColor(colors.gray)
+    term.write("(arrow keys for suggestions)")
     term.setCursorPos(13, 6)
     term.setTextColor(colors.white)
     term.setCursorBlink(true)
@@ -244,8 +247,6 @@ function topItems(storageChests)
             end
 
             if needleItem then
-                -- needleItem.count = needleItem.count + item.count
-
                 for _, haystackItem in pairs(items) do
                     if haystackItem.name == item.name then
                         haystackItem.count = haystackItem.count + item.count
@@ -259,6 +260,23 @@ function topItems(storageChests)
 
     return items
 end
+
+function completeMeState(needleText, storageChests)
+    local items = topItems(storageChests)
+    local resultItemNames = {}
+
+    for _, item in pairs(items) do
+        local prefixLength = string.find(item.name, ":") + 1
+        local haystackItemName = string.sub(item.name, prefixLength, prefixLength + # needleText - 1)
+        print(haystackItemName)
+        if string.find(haystackItemName, needleText) then
+            table.insert(resultItemNames, string.sub(item.name, prefixLength + #needleText))
+        end
+    end
+
+    return resultItemNames
+end
+
 
 function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, showTopItems, storageChests)
     term.clear()
@@ -339,47 +357,33 @@ function awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleMode
     return storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem
 end
 
-function manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
+function manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem, cachedSearch)
     storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
     drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload, storageChests)
 
-    local input = read()
+    local input = nil
+    function completeMe(text) return completeMeState(text, storageChests) end
+    if not (cachedSearch == nil or cachedSearch == "") then
+        input = read(nil, nil, completeMe, cachedSearch)
+    else
+        input = read(nil, nil, completeMe)
+    end
 
     autoUpload = false
-
-    drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload, storageChests)
-
-    storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
-        awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
-
-    if not (input == "") then
-        collectItemsFrom(storageChests, input, turtleModem)
-
-        term.setCursorPos(1, 10)
-        term.setTextColor(colors.gray)
-        term.write("Press any key to continue...")
-        term.setTextColor(colors.white)
-        term.setCursorBlink(false)
-
-        while true do
-            _, key = os.pullEvent("key")
-            if not (key == keys.leftShift) then
-                break
-            end
-        end
-    else
-        if dbg then term.setTextColor(colors.orange) end
-        if dbg then term.write("Clearing input box...") end
-        if dbg then term.setTextColor(colors.white) end
-    end
 
     storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
     if dgb then term.setCursorPos(1, 11) end
     storeAllItems(storageChests, turtleModem, dbg)
+
+    if not (input == "") then
+        collectItemsFrom(storageChests, input, turtleModem)
+    end
+
+    return input
 end
 
 function main(args)
@@ -391,22 +395,15 @@ function main(args)
         print("release mode")
     end
 
-    -- local storageChests, modem = init()
-    local storageChests, modem = nil
-
-    -- if not storageChests or not modem then
-    --     return
-    -- end
-
-    -- local storageChests, sumOfUsedSlots, sumOfMaxSlots = indexStorage(storageChests)
-    local storageChests, sumOfUsedSlots, sumOfMaxSlots = nil
+    local storageChests, modem, storageChests, sumOfUsedSlots, sumOfMaxSlots = nil
 
     parallel.waitForAll(
         function (spawn)
             spawn(
                 function()
+                    local cachedSearch
                     while true do
-                        manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, modem)
+                        cachedSearch = manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, modem, cachedSearch)
                     end
                 end
             )
