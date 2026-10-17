@@ -9,6 +9,9 @@
 -- There is virtually no limit to the amount of chests.
 -- All long lasting actions are done im parallel.
 -- Download this script onto the golden turtle, give it a label and DO NOT REFUEL!
+--
+-- The turtle can also be used as a auto-uploader into the storage network.
+-- You only need to set "autouploading" to true in the interface (click the button)
 
 STORAGE_NAME_REFIX = "minecraft:chest_"
 
