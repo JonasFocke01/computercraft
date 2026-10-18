@@ -19,14 +19,20 @@ function initStorage(modem)
     local remoteModules = modem.getNamesRemote()
 
     local storageChests = {}
+    local trashCans = {}
 
     for _, peri in pairs(remoteModules) do
         if string.find(peri, STORAGE_NAME_REFIX) then
             table.insert(storageChests, peripheral.wrap(peri))
+        elseif string.find(peri, "turtle") then
+            local remoteTurtle = peripheral.wrap(peri)
+            if remoteTurtle.getLabel() == "me-trashCan" and remoteTurtle.isOn() then
+                table.insert(trashCans, remoteTurtle)
+            end
         end
     end
 
-    return storageChests
+    return storageChests, trashCans
 end
 
 function mostEmptyStorageChest(storageChests, minFreeSpace)
@@ -89,11 +95,27 @@ function storeAllItems(storageChests, turtleModem, dbg)
     )
 end
 
-function dropAllItems(storageChests, turtleModem, dbg)
+function dropAllItems()
     for i = 1, 16 do
         if turtle.getItemCount(i) > 0 then
             turtle.select(i)
             turtle.dropDown()
+        end
+    end
+end
+
+function sendAllItemsToTrash(trashCans, turtleModem)
+    for i = 1, 16 do
+        if turtle.getItemCount(i) > 0 then
+            if not (trashCans[1] == nil) then
+                -- turtle.pullItems(trashCans[1])
+                for k, field in pairs(trashCans[1]) do
+                    print(k)
+                end
+                os.exit(1)
+                -- trashCans[1].pullItems(turtleModem, i)
+                -- turtleModem.
+            end
         end
     end
 end
@@ -339,7 +361,7 @@ function init()
     if dgb then term.setCursorPos(1, 4) end
     if dgb then term.write("Found modem") end
 
-    local storageChests = initStorage(modem)
+    local storageChests, trashCans = initStorage(modem)
 
     if #storageChests == 0 then
         term.clear()
@@ -352,7 +374,7 @@ function init()
     if dgb then term.write("Initialized storage") end
     if dgb then term.setCursorPos(1, 6) end
 
-    return storageChests, modem
+    return storageChests, trashCans, modem
 end
 
 function checkInitialized(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
@@ -362,7 +384,7 @@ end
 -- TODO: Make faster
 function awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
     ::check::
-    storageChests, turtleModem = init()
+    storageChests, trashCans, turtleModem = init()
     if not (storageChests == nil and turtleModem == nil) then
         storageChests, sumOfUsedSlots, sumOfMaxSlots = indexStorage(storageChests, dbg)
     end
@@ -371,11 +393,11 @@ function awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleMode
         goto check
     end
 
-    return storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem
+    return storageChests, trashCans, sumOfUsedSlots, sumOfMaxSlots, turtleModem
 end
 
 function manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem, cachedSearch)
-    storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+    storageChests, trashCans, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
     drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, storageChests)
@@ -390,12 +412,12 @@ function manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, tur
             input = read(nil, nil, completeMe)
         end
 
-        storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+        storageChests, trashCans, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
         storeAllItems(storageChests, turtleModem, dbg)
 
-        storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+        storageChests, trashCans, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
         if not (input == "") then
@@ -434,9 +456,8 @@ function main(args)
                     while true do
                         if operationalMode == "terminal" then
                             cachedSearch = manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, modem, cachedSearch)
-                            -- os.sleep() -- not normal
                         else
-                            storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+                            storageChests, trashCans, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
                                 awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
                             drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, storageChests)
@@ -454,10 +475,13 @@ function main(args)
                             killRead = true
 
                             if operationalMode == "terminal" then
+                                os.setComputerLabel("me-autoUploader")
                                 operationalMode = "autoUpload"
                             elseif operationalMode == "autoUpload" then
+                                os.setComputerLabel("me-trashCan")
                                 operationalMode = "trashCan"
                             elseif operationalMode == "trashCan" then
+                                os.setComputerLabel("me-terminal")
                                 operationalMode = "terminal"
                             end
                         end
@@ -472,13 +496,16 @@ function main(args)
                     while true do
                         os.pullEvent("turtle_inventory")
 
-                        storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+                        storageChests, trashCans, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
                             awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
                         if operationalMode == "autoUpload" then
-                            storeAllItems(storageChests, turtleModem, dbg)
+
+                            sendAllItemsToTrash(trashCans, turtleModem)
+
+                            -- storeAllItems(storageChests, turtleModem, dbg)
                         elseif operationalMode == "trashCan" then
-                            dropAllItems(storageChests, turtleModem, dbg)
+                            dropAllItems()
                         end
 
                         os.sleep()
