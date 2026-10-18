@@ -89,6 +89,21 @@ function storeAllItems(storageChests, turtleModem, dbg)
     )
 end
 
+function dropAllItems(storageChests, turtleModem, dbg)
+    parallel.waitForAll(
+        function (spawn)
+            for i = 1, 16 do
+                spawn(
+                    function ()
+                        turtle.select(i)
+                        turtle.dropDown()
+                    end
+                )
+            end
+        end
+    )
+end
+
 function indexStorage(storageChests, dbg)
     local chestProcesses = {}
 
@@ -154,6 +169,8 @@ function collectItemsFrom(storageChests, query, turtleModem)
 end
 
 function textWithRainbow(text)
+    term.setBackgroundColor(colors.black)
+
     for i = 1, #text do
         local rColor = math.random(0, 10)
         local char = text:sub(i, i)
@@ -184,6 +201,7 @@ function textWithRainbow(text)
 
         term.write(char)
     end
+    print() -- flush output
 end
 
 function storeAndResetCursor(callback)
@@ -196,30 +214,20 @@ function storeAndResetCursor(callback)
     term.setBackgroundColor(bcolor)
 end
 
-function drawAutoUploadButton()
+function drawOperationalModeToggleButton()
     function drawButton()
-        term.setCursorPos(TERM_WIDTH - 12, 2)
         term.setTextColor(colors.black)
-        if autoUpload then
-            term.setBackgroundColor(colors.green)
-            term.write("autouploading")
-        else
-            term.setBackgroundColor(colors.red)
-            term.write("autouploading")
-        end
-    end
-    storeAndResetCursor(drawButton)
-end
-
-function drawShowStatsButton(showStats)
-    function drawButton()
-        term.setCursorPos(TERM_WIDTH - 9, 3)
-        term.setTextColor(colors.black)
-        term.setBackgroundColor(colors.lightGray)
-        if showStats then
-            term.write("hide stats")
-        else
-            term.write("show stats")
+        term.setBackgroundColor(colors.gray)
+        term.clearLine(TERM_HEIGHT - 1)
+        if operationalMode == "terminal" then
+        term.setCursorPos(TERM_WIDTH - 13, TERM_HEIGHT - 1)
+            term.write("mode: terminal")
+        elseif operationalMode == "autoUpload" then
+        term.setCursorPos(TERM_WIDTH - 16, TERM_HEIGHT - 1)
+            term.write("mode: auto upload")
+        elseif operationalMode == "trashCan" then
+        term.setCursorPos(TERM_WIDTH - 14, TERM_HEIGHT - 1)
+            term.write("mode: trash can")
         end
     end
     storeAndResetCursor(drawButton)
@@ -279,15 +287,33 @@ function completeMeState(needleText, storageChests)
     return resultItemNames
 end
 
+function drawStats(storageChests)
+    term.setCursorPos(1, 3)
+    local items = items(storageChests)
+    table.sort(items, function (a, b) return a.count > b.count end)
 
-function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, showStats, storageChests)
+    local totalItems = 0
+    for _, item in pairs(items) do
+        totalItems = totalItems + item.count
+    end
+
+    if #items >= 1 then term.write(tostring(totalItems) .. " total items") end
+    if #items >= 1 then term.setCursorPos(1, 4) term.write(tostring(sumOfUsedSlots) .. " stacks") end
+    if #items >= 1 then term.setCursorPos(1, 5) term.write(tostring(#items) .. " unique items") end
+    if #items >= 1 then term.setCursorPos(1, 7) term.write(tostring(items[1].count) .. "x " .. items[1].name) end
+    if #items >= 2 then term.setCursorPos(1, 8) term.write(tostring(items[2].count) .. "x " .. items[2].name) end
+    if #items >= 3 then term.setCursorPos(1, 9) term.write(tostring(items[3].count) .. "x " .. items[3].name) end
+    if #items >= 4 then term.setCursorPos(1, 10) term.write(tostring(items[4].count) .. "x " .. items[4].name) end
+    if #items >= 5 then term.setCursorPos(1, 11) term.write("...") end
+end
+
+function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, storageChests)
     term.clear()
     term.setCursorBlink(false)
     term.setCursorPos(1, 1)
     textWithRainbow("ComputerCraft ME System")
 
-    drawAutoUploadButton()
-    drawShowStatsButton(showStats)
+    drawOperationalModeToggleButton()
 
     if math.floor(sumOfMaxSlots * 0.9) <= sumOfUsedSlots then
         term.setTextColor(colors.red)
@@ -297,35 +323,13 @@ function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, showStats, storageChe
         term.setTextColor(colors.gray)
     end
 
-    if not showStats then
-        term.setCursorPos(1, TERM_HEIGHT)
-        term.write(sumOfUsedSlots .. "/" .. sumOfMaxSlots .. " used slots")
-    end
-
-    if not (autoUpload or showStats) then
+    if operationalMode == "terminal" then
         drawSearchPrompt()
-    elseif showStats then
-        term.setCursorPos(1, 3)
-        local items = items(storageChests)
-        table.sort(items, function (a, b) return a.count > b.count end)
-
-        local totalItems = 0
-        for _, item in pairs(items) do
-            totalItems = totalItems + item.count
-        end
-
-        if #items >= 1 then print(tostring(totalItems) .. " total items") end
-        if #items >= 1 then print(tostring(sumOfUsedSlots) .. " stacks") end
-        if #items >= 1 then print(tostring(#items) .. " unique items") end
-        if #items >= 1 then print() end
-        if #items >= 1 then print(tostring(items[1].count) .. "x " .. items[1].name) end
-        if #items >= 2 then print(tostring(items[2].count) .. "x " .. items[2].name) end
-        if #items >= 3 then print(tostring(items[3].count) .. "x " .. items[3].name) end
-        if #items >= 4 then print(tostring(items[4].count) .. "x " .. items[4].name) end
-        if #items >= 5 then print(tostring(items[5].count) .. "x " .. items[5].name) end
-        if #items >= 7 then print("...") end
+    elseif operationalMode == "autoUpload" then
+        drawStats(storageChests)
+    elseif operationalMode == "trashCan" then
+        drawStats(storageChests)
     end
-
 end
 
 function init()
@@ -361,6 +365,7 @@ function checkInitialized(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, tur
     return not (sumOfUsedSlots == nil or sumOfMaxSlots == nil or storageChests == nil or turtleModem == nil)
 end
 
+-- TODO: Make faster
 function awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
     ::check::
     storageChests, turtleModem = init()
@@ -379,27 +384,39 @@ function manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, tur
     storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
-    drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, autoUpload, storageChests)
+    drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, storageChests)
 
     local input = nil
-    function completeMe(text) return completeMeState(text, storageChests) end
-    if not (cachedSearch == nil or cachedSearch == "") then
-        input = read(nil, nil, completeMe, cachedSearch)
-    else
-        input = read(nil, nil, completeMe)
-    end
+    local function completeMe(text) return completeMeState(text, storageChests) end
 
-    autoUpload = false
+    local function prompt()
+        if not (cachedSearch == nil or cachedSearch == "") then
+            input = read(nil, nil, completeMe, cachedSearch)
+        else
+            input = read(nil, nil, completeMe)
+        end
 
-    storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+        storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
         awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
-    if dgb then term.setCursorPos(1, 11) end
-    storeAllItems(storageChests, turtleModem, dbg)
+        storeAllItems(storageChests, turtleModem, dbg)
 
-    if not (input == "") then
-        collectItemsFrom(storageChests, input, turtleModem)
+        storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+        awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
+
+        if not (input == "") then
+            collectItemsFrom(storageChests, input, turtleModem)
+        end
     end
+
+    local function killPrompt()
+        while not killRead do
+            os.sleep()
+        end
+        killRead = false
+    end
+
+    parallel.waitForAny(prompt, killPrompt)
 
     return input
 end
@@ -421,29 +438,35 @@ function main(args)
                 function()
                     local cachedSearch
                     while true do
-                        cachedSearch = manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, modem, cachedSearch)
+                        if operationalMode == "terminal" then
+                            cachedSearch = manualItemSearch(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, modem, cachedSearch)
+                            -- os.sleep() -- not normal
+                        else
+                            storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+                                awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
+
+                            drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, storageChests)
+                        end
                     end
                 end
             )
 
             spawn(
                 function ()
-                    local showStats = false
-
                     while true do
                         local event, button, x, y = os.pullEvent("mouse_click")
 
-                        if x > TERM_WIDTH - 12 and y == 2 then
-                            autoUpload = not autoUpload
-                        end
-                        if x > TERM_WIDTH - 9 and y == 3 then
-                            showStats = not showStats
-                        end
+                        if y == TERM_HEIGHT - 1 and x > TERM_WIDTH - 16 then
+                            killRead = true
 
-                        storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
-                            awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
-
-                        drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, showStats, storageChests)
+                            if operationalMode == "terminal" then
+                                operationalMode = "autoUpload"
+                            elseif operationalMode == "autoUpload" then
+                                operationalMode = "trashCan"
+                            elseif operationalMode == "trashCan" then
+                                operationalMode = "terminal"
+                            end
+                        end
 
                         os.sleep()
                     end
@@ -455,13 +478,13 @@ function main(args)
                     while true do
                         os.pullEvent("turtle_inventory")
 
-                        if autoUpload then
-                            storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
-                                awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
+                        storageChests, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+                            awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
+                        if operationalMode == "autoUpload" then
                             storeAllItems(storageChests, turtleModem, dbg)
-
-                            drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, true, storageChests)
+                        elseif operationalMode == "trashCan" then
+                            dropAllItems(storageChests, turtleModem, dbg)
                         end
 
                         os.sleep()
@@ -475,6 +498,15 @@ end
 TERM_WIDTH, TERM_HEIGHT = term.getSize()
 
 local tArgs = { ... }
-autoUpload = false
+
+-- OpterationalMode:
+-- - "terminal":   Everyone can search for items in the storage
+-- - "autoUpload": Upload every item put into the turtle via steve, hoppers or other means into storage
+-- - "trashCan":   Advertise as "trashCan" on the network, so other turtles can send unwanted items. All items received are dropped bellow, where ideally a lava bucket was placed
+operationalMode = "terminal"
+
+-- This should only stop the current "read" in the search function
+killRead = false
+
 
 main(tArgs)
