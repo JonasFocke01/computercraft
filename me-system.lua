@@ -90,18 +90,12 @@ function storeAllItems(storageChests, turtleModem, dbg)
 end
 
 function dropAllItems(storageChests, turtleModem, dbg)
-    parallel.waitForAll(
-        function (spawn)
-            for i = 1, 16 do
-                spawn(
-                    function ()
-                        turtle.select(i)
-                        turtle.dropDown()
-                    end
-                )
-            end
+    for i = 1, 16 do
+        if turtle.getItemCount(i) > 0 then
+            turtle.select(i)
+            turtle.dropDown()
         end
-    )
+    end
 end
 
 function indexStorage(storageChests, dbg)
