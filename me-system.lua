@@ -2,8 +2,8 @@
 -- This is only wired to require no additional mods besides ComputerCraft
 --
 -- Ingame shematic:
--- ONE golden turtle without equipment sits ontop of a wired modem (full block).
--- The wired modem is then connected to a wire and ACTIVATED (by rightclicking on it).
+-- Multiple golden turtle without equipment sit besides connected wired modems (full blocks).
+-- The wired modem must be ACTIVATED (by rightclicking on it).
 -- The wire is then connected to a network of other modems with chests attached
 --
 -- There is virtually no limit to the amount of chests.
@@ -11,9 +11,18 @@
 -- Download this script onto the golden turtle, give it a label and DO NOT REFUEL!
 --
 -- The turtle can also be used as a auto-uploader into the storage network.
--- You only need to set "autouploading" to true in the interface (click the button)
+-- You only need to set the operational mode to "autouploading" in the interface (click the button)
+--
+-- The turtle also checks and limits the total amount of an item in the storage uppon autouploading.
+-- To enable this feature, just place a droper besides a modem like any other chest and build a simple redstone cirquit to auto-dispose anything stored. The dropper gets autodetected by the system
+-- When the feature is enabled: All unique items above the `MAX_ITEM_COUNT` threshhold go directly to that dropper.
+-- To increase the disposable buffer (because turtles are way faster than droppers), place multiple droppers in the system.
+-- The turtles then try to load balance between them.
+
+MAX_ITEM_COUNT = 15000
 
 STORAGE_NAME_REFIX = "minecraft:chest_"
+TRASH_NAME_PREFIX = "minecraft:dropper_"
 
 function initStorage(modem)
     local remoteModules = modem.getNamesRemote()
@@ -24,11 +33,8 @@ function initStorage(modem)
     for _, peri in pairs(remoteModules) do
         if string.find(peri, STORAGE_NAME_REFIX) then
             table.insert(storageChests, peripheral.wrap(peri))
-        elseif string.find(peri, "turtle") then
-            local remoteTurtle = peripheral.wrap(peri)
-            if remoteTurtle.getLabel() == "me-trashCan" and remoteTurtle.isOn() then
-                table.insert(trashCans, remoteTurtle)
-            end
+        elseif string.find(peri, TRASH_NAME_PREFIX) then
+            table.insert(trashCans, peripheral.wrap(peri))
         end
     end
 
@@ -53,6 +59,27 @@ function mostEmptyStorageChest(storageChests, minFreeSpace)
         return nil
     else
         return smallest, contentSize
+    end
+
+end
+
+function mostEmptyTrashCan(trashCans)
+    local smallestNum = 9
+    local smallest = nil
+
+    for k, trashCan in pairs(trashCans) do
+        local contentSize = #trashCan.list()
+
+        if contentSize < 9 and contentSize < smallestNum then
+            smallestNum = contentSize
+            smallest = trashCan
+        end
+    end
+
+    if smallest == 9 then
+        return nil
+    else
+        return smallest
     end
 
 end
@@ -105,19 +132,31 @@ function dropAllItems()
 end
 
 function sendAllItemsToTrash(trashCans, turtleModem)
+    local procs = {}
+
     for i = 1, 16 do
-        if turtle.getItemCount(i) > 0 then
-            if not (trashCans[1] == nil) then
-                -- turtle.pullItems(trashCans[1])
-                for k, field in pairs(trashCans[1]) do
-                    print(k)
+        table.insert(procs,
+            function ()
+                -- local randomTrashCanIndex = math.random(1, (#trashCans - 1))
+                local trashCan = mostEmptyTrashCan(trashCans)
+
+                if trashCan == nil then
+                    return
                 end
-                os.exit(1)
-                -- trashCans[1].pullItems(turtleModem, i)
-                -- turtleModem.
+
+                trashCan.pullItems(turtleModem.getNameLocal(), i)
             end
-        end
+        )
     end
+
+    parallel.waitForAll(
+        function (spawn)
+            for _, proc in pairs(procs) do
+                spawn(proc)
+            end
+
+        end
+    )
 end
 
 function indexStorage(storageChests, dbg)
@@ -303,8 +342,9 @@ function completeMeState(needleText, storageChests)
     return resultItemNames
 end
 
-function drawStats(storageChests)
+function drawStats(storageChests, sumOfUsedSlots)
     term.setCursorPos(1, 3)
+    term.setTextColor(colors.gray)
     local items = items(storageChests)
     table.sort(items, function (a, b) return a.count > b.count end)
 
@@ -313,6 +353,7 @@ function drawStats(storageChests)
         totalItems = totalItems + item.count
     end
 
+    if #items == 0 then term.write("No items found") end
     if #items >= 1 then term.write(tostring(totalItems) .. " total items") end
     if #items >= 1 then term.setCursorPos(1, 4) term.write(tostring(sumOfUsedSlots) .. " stacks") end
     if #items >= 1 then term.setCursorPos(1, 5) term.write(tostring(#items) .. " unique items") end
@@ -342,9 +383,9 @@ function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, storageChests)
     if operationalMode == "terminal" then
         drawSearchPrompt()
     elseif operationalMode == "autoUpload" then
-        drawStats(storageChests)
+        drawStats(storageChests, sumOfUsedSlots)
     elseif operationalMode == "trashCan" then
-        drawStats(storageChests)
+        drawStats(storageChests, sumOfUsedSlots)
     end
 end
 
@@ -448,6 +489,16 @@ function main(args)
 
     local storageChests, modem, storageChests, sumOfUsedSlots, sumOfMaxSlots = nil
 
+    local label = os.getComputerLabel()
+
+    if label == "me-autoUploader" then
+        operationalMode = "autoUpload"
+    elseif label == "me-terminal" then
+        operationalMode = "terminal"
+    elseif label == "me-trashCan" then
+        operationalMode = "trashCan"
+    end
+
     parallel.waitForAll(
         function (spawn)
             spawn(
@@ -493,21 +544,50 @@ function main(args)
 
             spawn(
                 function ()
+                    local passNum = 0
                     while true do
+                        passNum = passNum + 1
                         os.pullEvent("turtle_inventory")
 
                         storageChests, trashCans, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
                             awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
 
                         if operationalMode == "autoUpload" then
+                            local needleItem = turtle.getItemDetail(1)
 
-                            sendAllItemsToTrash(trashCans, turtleModem)
+                            if needleItem == nil then
+                                storeAllItems(storageChests, turtleModem, dbg)
+                                goto continue
+                            end
 
-                            -- storeAllItems(storageChests, turtleModem, dbg)
+                            local needleItemName = needleItem.name
+
+                            local storedItems = items(storageChests)
+                            local haystackItem = nil
+
+                            for _, sitem in pairs(storedItems) do
+                                if sitem.name == needleItemName then
+                                    haystackItem = sitem
+                                end
+                            end
+
+                            if haystackItem == nil then
+                                storeAllItems(storageChests, turtleModem, dbg)
+                                goto continue
+                            end
+
+                            if haystackItem.count < MAX_ITEM_COUNT then
+                                print("storing all")
+                                storeAllItems(storageChests, turtleModem, dbg)
+                            else
+                                print("sending to trash")
+                                sendAllItemsToTrash(trashCans, turtleModem)
+                            end
                         elseif operationalMode == "trashCan" then
                             dropAllItems()
                         end
 
+                        ::continue::
                         os.sleep()
                     end
                 end
