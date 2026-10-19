@@ -424,22 +424,23 @@ function drawStats(storageChests, sumOfUsedSlots)
             end
         end
 
-        if haystackItem == nil then
-            term.setTextColor(colors.red)
-            term.setCursorPos(1,5)
-            term.write("No item like that found in the storage")
-            return
-        end
-
         term.setCursorPos(1,5)
         term.write("Watching on ")
         term.setTextColor(colors.black)
         term.setBackgroundColor(colors.white)
-        term.write(haystackItem.name)
+        if haystackItem == nil then
+            term.write(needleItem.name)
+        else
+            term.write(haystackItem.name)
+        end
         term.setBackgroundColor(colors.black)
         term.setCursorPos(1,7)
         term.setTextColor(colors.lightGray)
-        term.write(tostring(haystackItem.count) .. " in storage")
+        if haystackItem == nil then
+            term.write("0 in storage")
+        else
+            term.write(tostring(haystackItem.count) .. " in storage")
+        end
         term.setCursorPos(1,8)
         term.write(tostring(MIN_DOWNLOADABLE_ITEM_COUNT) .. " threshold")
     end
