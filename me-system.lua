@@ -324,13 +324,31 @@ function drawOperationalModeToggleButton()
     storeAndResetCursor(drawButton)
 end
 
-function drawSearchPrompt()
+function drawSearchPrompt(sumOfUsedSlots, sumOfMaxSlots)
+
+    if math.floor(sumOfMaxSlots * 0.9) <= sumOfUsedSlots then
+        term.setTextColor(colors.red)
+    elseif math.floor(sumOfMaxSlots * 0.7) <= sumOfUsedSlots then
+        term.setTextColor(colors.pink)
+    else
+        term.setTextColor(colors.gray)
+    end
+
+    term.setCursorPos(1, TERM_HEIGHT)
+    term.write(tostring(sumOfUsedSlots) .. " / " .. tostring(sumOfMaxSlots) .. " slots used")
+
+    term.setCursorPos(1, 8)
+    term.setTextColor(colors.gray)
+    term.write("Suggestions:")
+    term.setCursorPos(1, 9)
+    term.write("    cycle: up / down arrow")
+    term.setCursorPos(1, 10)
+    term.write("    accept: right arrow / tab")
+
+
     term.setCursorPos(1, 6)
     term.setTextColor(colors.lightGray)
     term.write("Search for: ")
-    term.setCursorPos(1, 7)
-    term.setTextColor(colors.gray)
-    term.write("(arrow keys for suggestions)")
     term.setCursorPos(13, 6)
     term.setTextColor(colors.white)
     term.setCursorBlink(true)
@@ -455,16 +473,8 @@ function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, storageChests)
 
     drawOperationalModeToggleButton()
 
-    if math.floor(sumOfMaxSlots * 0.9) <= sumOfUsedSlots then
-        term.setTextColor(colors.red)
-    elseif math.floor(sumOfMaxSlots * 0.7) <= sumOfUsedSlots then
-        term.setTextColor(colors.pink)
-    else
-        term.setTextColor(colors.gray)
-    end
-
     if operationalMode == "terminal" then
-        drawSearchPrompt()
+        drawSearchPrompt(sumOfUsedSlots, sumOfMaxSlots)
     elseif operationalMode == "autoUpload" then
         drawStats(storageChests, sumOfUsedSlots)
     elseif operationalMode == "autoDownload" then
@@ -705,7 +715,7 @@ function main(args)
                         end
 
                         ::continue::
-                        os.sleep(1)
+                        os.sleep()
                     end
                 end
             )
