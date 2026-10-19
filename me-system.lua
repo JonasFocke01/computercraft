@@ -38,6 +38,10 @@
 -- The items are dropped otherwhise.
 -- Warning: Hoppers will pull out ALL items from the turtle. Use a chest to be safe.
 --
+--
+-- All turtles very slowly sort the storage in the background while connected.
+-- Sorting means more efficient storage usage over time, but also that disconnecting a chest at any time crashes all turtles eventually
+--
 -- Hint: Do not refuel the turtle to prevent accidents
 
 MAX_UNIQUE_ITEM_COUNT = 15000 -- 4.5 double chest worth of stacks
@@ -142,6 +146,16 @@ function storeAllItems(storageChests, turtleModem, dbg)
 
         end
     )
+end
+
+local function subsliceWithoutN(t, n)
+    local result = {}
+    for i = 1, #t do
+        if i ~= n then
+            table.insert(result, t[i])
+        end
+    end
+    return result
 end
 
 function dropAllItems()
@@ -677,6 +691,45 @@ function main(args)
                         end
 
                         ::continue::
+                        os.sleep()
+                    end
+                end
+            )
+
+            spawn(
+                function()
+                    while true do
+                        storageChests, trashCans, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+                            awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
+
+                        local sourceChest = storageChests[1]
+
+                        for c = 1, #storageChests do
+                            local sourceChest = storageChests[c]
+
+                            for i = 1, sourceChest.maxSize do
+                                local sourceSlotDetails = sourceChest.getItemDetail(i)
+
+                                if sourceSlotDetails then
+                                    if sourceSlotDetails.count < sourceSlotDetails.maxCount then
+                                        local haystack = subsliceWithoutN(storageChests, c)
+
+                                        for _, haystackChest in pairs(haystack) do
+                                            for j = 1, haystackChest.maxSize do
+
+                                                local haystackSlotDetails = haystackChest.getItemDetail(j)
+
+                                                if haystackSlotDetails and haystackSlotDetails.displayName == sourceSlotDetails.displayName and haystackSlotDetails.count < haystackSlotDetails.maxCount then
+                                                    haystackChest.pullItems(peripheral.getName(sourceChest), i)
+                                                    goto slotTransfered
+                                                end
+                                            end
+                                        end
+                                        ::slotTransfered::
+                                    end
+                                end
+                            end
+                        end
                         os.sleep()
                     end
                 end
