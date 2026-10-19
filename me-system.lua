@@ -1,25 +1,47 @@
--- A working me-system
--- This is only wired to require no additional mods besides ComputerCraft
+-- A working me-system running on turtles on a wired network.
+-- This is only wired to require no additional mods besides ComputerCraft.
+-- All storage on the network is done unsorted and could require refinement to make optimal use of the available space.
 --
 -- Ingame shematic:
--- Multiple golden turtle without equipment sit besides connected wired modems (full blocks).
--- The wired modem must be ACTIVATED (by rightclicking on it).
--- The wire is then connected to a network of other modems with chests attached
 --
--- There is virtually no limit to the amount of chests.
--- All long lasting actions are done im parallel.
--- Download this script onto the golden turtle, give it a label and DO NOT REFUEL!
+-- A network of wired modems (full blocks) are connected via cables and activated by rightclicking on them.
+-- At least one chest is then placed besides a modem. There is theoretically a limit of about 256 chests. (untested)
+-- A GOLDEN turtle WITHOUT equipment is placed besides a wired network.
 --
--- The turtle can also be used as a auto-uploader into the storage network.
--- You only need to set the operational mode to "autouploading" in the interface (click the button)
+-- MODES:
 --
--- The turtle also checks and limits the total amount of an item in the storage uppon autouploading.
--- To enable this feature, just place a droper besides a modem like any other chest and build a simple redstone cirquit to auto-dispose anything stored. The dropper gets autodetected by the system
--- When the feature is enabled: All unique items above the `MAX_ITEM_COUNT` threshhold go directly to that dropper.
--- To increase the disposable buffer (because turtles are way faster than droppers), place multiple droppers in the system.
--- The turtles then try to load balance between them.
+-- All modes are contained in this script and can be switched by starting a turtle and then pressing the mode button in the lower right corner.
+--
+-- 1. me-access-terminal
+--
+-- The user can type in search querys for blocks or types of blocks that are then pulled from the storage and placed in the turtle inventory.
+-- Each time a new query is typed in, the turtle sends back all items in the most free-space chest.
+--
+-- 2. me-auto-upload
+--
+-- This script also has a auto-uploader build in, where the search prompt disappears.
+-- Every item then put into the turtle inventory is directly send to storage.
+-- This function makes turtles most usefull to funnel farms directly into the storage system.
+--
+--      Limit Items while auto-uploading:
+--
+--      This function also comes with a limiter for items.
+--      Uppon each upload, the to-upload item gets checked by amount in the storage and send to garbage when overflowing.
+--      To enable this feature, place one, or multiple for auto-loadbalancing, DROPPERS with a auto-dispose redstone circuit on the network.
+--      Edit the constant `MAX_UNIQUE_ITEM_COUNT` to configure the maximum amount of any unique item in the storage.
+--
+-- 3. me-auto-download
+--
+-- The turtle will accept one item in the 16nth slot and searches the storage system for that item.
+-- When more than `MIN_DOWNLOADABLE_ITEM_COUNT` is found, some items are pulled into the turtle and dropped BELLOW.
+-- To process any of that items further, one would need to place a chest bellow the turtle, where the items then get put into.
+-- The items are dropped otherwhise.
+-- Warning: Hoppers will pull out ALL items from the turtle. Use a chest to be safe.
+--
+-- Hint: Do not refuel the turtle to prevent accidents
 
-MAX_ITEM_COUNT = 15000
+MAX_UNIQUE_ITEM_COUNT = 15000 -- 4.5 double chest worth of stacks
+MIN_DOWNLOADABLE_ITEM_COUNT = 576 -- 9 stacks aka one inventory row
 
 STORAGE_NAME_REFIX = "minecraft:chest_"
 TRASH_NAME_PREFIX = "minecraft:dropper_"
@@ -123,7 +145,7 @@ function storeAllItems(storageChests, turtleModem, dbg)
 end
 
 function dropAllItems()
-    for i = 1, 16 do
+    for i = 1, 15 do
         if turtle.getItemCount(i) > 0 then
             turtle.select(i)
             turtle.dropDown()
@@ -137,7 +159,6 @@ function sendAllItemsToTrash(trashCans, turtleModem)
     for i = 1, 16 do
         table.insert(procs,
             function ()
-                -- local randomTrashCanIndex = math.random(1, (#trashCans - 1))
                 local trashCan = mostEmptyTrashCan(trashCans)
 
                 if trashCan == nil then
@@ -196,26 +217,41 @@ function indexStorage(storageChests, dbg)
     return storageChests, sumOfUsedSlots, sumOfMaxSlots
 end
 
-function collectItemsFrom(storageChests, query, turtleModem)
+function collectItemsFrom(storageChests, query, turtleModem, limit)
+    if limit == nil then
+        limit = 1024 -- Max turtle inv.
+    end
+
     local collectProcesses = {}
     for k, chest in pairs(storageChests) do
         for ic, item in pairs(chest.cachedList) do
-            table.insert(collectProcesses,
-                function ()
-                    for ik, itemContent in pairs(item) do
-                        if ik == "name" and string.find(itemContent, query) then
-                            chest.pushItems(turtleModem.getNameLocal(), ic)
-                        end
-                    end
+            for ik, itemContent in pairs(item) do
+                if ik == "name" and string.find(itemContent, query) and limit > 0 then
+                    table.insert(collectProcesses,
+                        {
+                            ["chest"] = chest,
+                            ["limit"] = limit,
+                            ["ic"] = ic
+                        }
+                    )
+                    limit = limit - item.count
                 end
-            )
+            end
         end
     end
 
     parallel.waitForAll(
         function (spawn)
             for _, collectProcess in pairs(collectProcesses) do
-                spawn(collectProcess)
+                spawn(
+                    function()
+                        collectProcess.chest.pushItems(
+                            turtleModem.getNameLocal(),
+                            collectProcess.ic,
+                            collectProcess.limit
+                        )
+                    end
+                )
             end
 
         end
@@ -280,9 +316,9 @@ function drawOperationalModeToggleButton()
         elseif operationalMode == "autoUpload" then
         term.setCursorPos(TERM_WIDTH - 16, TERM_HEIGHT - 1)
             term.write("mode: auto upload")
-        elseif operationalMode == "trashCan" then
-        term.setCursorPos(TERM_WIDTH - 14, TERM_HEIGHT - 1)
-            term.write("mode: trash can")
+        elseif operationalMode == "autoDownload" then
+        term.setCursorPos(TERM_WIDTH - 18, TERM_HEIGHT - 1)
+            term.write("mode: auto download")
         end
     end
     storeAndResetCursor(drawButton)
@@ -344,31 +380,77 @@ end
 
 function drawStats(storageChests, sumOfUsedSlots)
     term.setCursorPos(1, 3)
-    term.setTextColor(colors.gray)
+    term.setTextColor(colors.lightGray)
     local items = items(storageChests)
-    table.sort(items, function (a, b) return a.count > b.count end)
 
-    local totalItems = 0
-    for _, item in pairs(items) do
-        totalItems = totalItems + item.count
+    if operationalMode == "autoUpload" then
+        table.sort(items, function (a, b) return a.count > b.count end)
+
+        local totalItems = 0
+        for _, item in pairs(items) do
+            totalItems = totalItems + item.count
+        end
+
+        if #items == 0 then term.write("No items found") end
+        if #items >= 1 then term.write(tostring(totalItems) .. " total items") end
+        if #items >= 1 then term.setCursorPos(1, 4) term.write(tostring(sumOfUsedSlots) .. " stacks") end
+        if #items >= 1 then term.setCursorPos(1, 5) term.write(tostring(#items) .. " unique items") end
+        if #items >= 1 then term.setCursorPos(1, 7) term.write(tostring(items[1].count) .. "x " .. items[1].name) end
+        if #items >= 2 then term.setCursorPos(1, 8) term.write(tostring(items[2].count) .. "x " .. items[2].name) end
+        if #items >= 3 then term.setCursorPos(1, 9) term.write(tostring(items[3].count) .. "x " .. items[3].name) end
+        if #items >= 4 then term.setCursorPos(1, 10) term.write(tostring(items[4].count) .. "x " .. items[4].name) end
+        if #items >= 5 then term.setCursorPos(1, 11) term.write("...") end
+    elseif operationalMode == "autoDownload" then
+        if #items == 0 then
+            term.write("No items found")
+            return
+        end
+
+        local needleItem = turtle.getItemDetail(16)
+
+        if needleItem == nil then
+            term.setTextColor(colors.red)
+            term.setCursorPos(1,5)
+            term.write("Please put the item to download")
+            term.setCursorPos(1,6)
+            term.write(" in the 16th slot")
+            return
+        end
+
+        local haystackItem = nil
+        for _, sitem in pairs(items) do
+            if sitem.name == needleItem.name then
+                haystackItem = sitem
+            end
+        end
+
+        if haystackItem == nil then
+            term.setTextColor(colors.red)
+            term.setCursorPos(1,5)
+            term.write("No item like that found in the storage")
+            return
+        end
+
+        term.setCursorPos(1,5)
+        term.write("Watching on ")
+        term.setTextColor(colors.black)
+        term.setBackgroundColor(colors.white)
+        term.write(haystackItem.name)
+        term.setBackgroundColor(colors.black)
+        term.setCursorPos(1,7)
+        term.setTextColor(colors.lightGray)
+        term.write(tostring(haystackItem.count) .. " in storage")
+        term.setCursorPos(1,8)
+        term.write(tostring(MIN_DOWNLOADABLE_ITEM_COUNT) .. " threshold")
     end
-
-    if #items == 0 then term.write("No items found") end
-    if #items >= 1 then term.write(tostring(totalItems) .. " total items") end
-    if #items >= 1 then term.setCursorPos(1, 4) term.write(tostring(sumOfUsedSlots) .. " stacks") end
-    if #items >= 1 then term.setCursorPos(1, 5) term.write(tostring(#items) .. " unique items") end
-    if #items >= 1 then term.setCursorPos(1, 7) term.write(tostring(items[1].count) .. "x " .. items[1].name) end
-    if #items >= 2 then term.setCursorPos(1, 8) term.write(tostring(items[2].count) .. "x " .. items[2].name) end
-    if #items >= 3 then term.setCursorPos(1, 9) term.write(tostring(items[3].count) .. "x " .. items[3].name) end
-    if #items >= 4 then term.setCursorPos(1, 10) term.write(tostring(items[4].count) .. "x " .. items[4].name) end
-    if #items >= 5 then term.setCursorPos(1, 11) term.write("...") end
 end
 
 function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, storageChests)
     term.clear()
     term.setCursorBlink(false)
-    term.setCursorPos(1, 1)
-    textWithRainbow("ComputerCraft ME System")
+    local text = "ComputerCraft ME System"
+    term.setCursorPos((TERM_WIDTH / 2) - (#text / 2), 1)
+    textWithRainbow(text)
 
     drawOperationalModeToggleButton()
 
@@ -384,7 +466,7 @@ function drawFixedInterface(sumOfUsedSlots, sumOfMaxSlots, storageChests)
         drawSearchPrompt()
     elseif operationalMode == "autoUpload" then
         drawStats(storageChests, sumOfUsedSlots)
-    elseif operationalMode == "trashCan" then
+    elseif operationalMode == "autoDownload" then
         drawStats(storageChests, sumOfUsedSlots)
     end
 end
@@ -495,8 +577,8 @@ function main(args)
         operationalMode = "autoUpload"
     elseif label == "me-terminal" then
         operationalMode = "terminal"
-    elseif label == "me-trashCan" then
-        operationalMode = "trashCan"
+    elseif label == "me-autoDownload" then
+        operationalMode = "autoDownload"
     end
 
     parallel.waitForAll(
@@ -522,16 +604,16 @@ function main(args)
                     while true do
                         local event, button, x, y = os.pullEvent("mouse_click")
 
-                        if y == TERM_HEIGHT - 1 and x > TERM_WIDTH - 16 then
+                        if y == TERM_HEIGHT - 1 and x > TERM_WIDTH - 18 then
                             killRead = true
 
                             if operationalMode == "terminal" then
                                 os.setComputerLabel("me-autoUploader")
                                 operationalMode = "autoUpload"
                             elseif operationalMode == "autoUpload" then
-                                os.setComputerLabel("me-trashCan")
-                                operationalMode = "trashCan"
-                            elseif operationalMode == "trashCan" then
+                                os.setComputerLabel("me-autoDownload")
+                                operationalMode = "autoDownload"
+                            elseif operationalMode == "autoDownload" then
                                 os.setComputerLabel("me-terminal")
                                 operationalMode = "terminal"
                             end
@@ -576,19 +658,53 @@ function main(args)
                                 goto continue
                             end
 
-                            if haystackItem.count < MAX_ITEM_COUNT then
-                                print("storing all")
+                            if haystackItem.count < MAX_UNIQUE_ITEM_COUNT then
                                 storeAllItems(storageChests, turtleModem, dbg)
                             else
-                                print("sending to trash")
                                 sendAllItemsToTrash(trashCans, turtleModem)
                             end
-                        elseif operationalMode == "trashCan" then
-                            dropAllItems()
                         end
 
                         ::continue::
                         os.sleep()
+                    end
+                end
+            )
+
+            spawn(
+                function ()
+                    while true do
+                        if operationalMode == "autoDownload" then
+
+                            storageChests, trashCans, sumOfUsedSlots, sumOfMaxSlots, turtleModem =
+                                awaitInit(sumOfUsedSlots, sumOfMaxSlots, storageChests, dbg, turtleModem)
+
+                            local needleItem = turtle.getItemDetail(16)
+                            local items = items(storageChests)
+
+                            if needleItem == nil then
+                                goto continue
+                            end
+
+                            local haystackItem = nil
+                            for _, sitem in pairs(items) do
+                                if sitem.name == needleItem.name then
+                                    haystackItem = sitem
+                                end
+                            end
+
+                            if haystackItem == nil then
+                                goto continue
+                            end
+
+                            if haystackItem.count > MIN_DOWNLOADABLE_ITEM_COUNT then
+                                collectItemsFrom(storageChests, haystackItem.name, turtleModem, haystackItem.count - MIN_DOWNLOADABLE_ITEM_COUNT)
+                                dropAllItems()
+                            end
+                        end
+
+                        ::continue::
+                        os.sleep(1)
                     end
                 end
             )
@@ -603,7 +719,7 @@ local tArgs = { ... }
 -- OpterationalMode:
 -- - "terminal":   Everyone can search for items in the storage
 -- - "autoUpload": Upload every item put into the turtle via steve, hoppers or other means into storage
--- - "trashCan":   Advertise as "trashCan" on the network, so other turtles can send unwanted items. All items received are dropped bellow, where ideally a lava bucket was placed
+-- - "autoDownload":   Download one unique item from storage when there are more than N available
 operationalMode = "terminal"
 
 -- This should only stop the current "read" in the search function
